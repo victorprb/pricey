@@ -4,19 +4,21 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gocolly/colly/v2"
+	tb "gopkg.in/tucnak/telebot.v2"
 )
 
 type appConfig struct {
-	url string
-	pattern string
+	url         string
+	pattern     string
 	targetPrice int
-	interval time.Duration
-	currency string
+	interval    time.Duration
+	currency    string
 }
 
 func main() {
@@ -34,14 +36,14 @@ func main() {
 
 func newConfig() appConfig {
 	// the flags here serve as a configuration to the app
-	url := flag.String("url","", "the url to be crawled <required>")
+	url := flag.String("url", "", "the url to be crawled <required>")
 	pattern := flag.String("pattern", "", "the corresponding css rule <required>")
 	targetPrice := flag.Int("target", 0, "the desired price <required>")
-	interval := flag.Duration("interval", 5 * time.Second, "the time interval for crawling")
+	interval := flag.Duration("interval", 5*time.Second, "the time interval for crawling")
 	currency := flag.String("currency", "", "the currency (US$ (US), R$ (BR)...")
 	flag.Parse()
 
-	return appConfig {
+	return appConfig{
 		*url,
 		*pattern,
 		*targetPrice,
@@ -74,7 +76,10 @@ func visit(appConfig appConfig) {
 		} else {
 			fmt.Printf("debug => expected: %d, current: %d\n", appConfig.targetPrice, price)
 			if appConfig.targetPrice > 0.0 && price <= appConfig.targetPrice {
-				log.Printf("wow! the price (%d) looks good now!\n", price)
+				message := fmt.Sprintf("wow! the price (%d) looks good now!", price)
+
+				log.Print(message)
+				telegramNotify(message)
 			} else {
 				log.Printf("the current price is (%d), I'll keep looking...\n", price)
 			}
@@ -98,3 +103,23 @@ func stripSymbols(str string, symbols []string) (int, error) {
 	return stripSymbols(strings.Replace(str, symbols[0], "", -1), symbols[1:])
 }
 
+// TODO: refactor this chunk
+func telegramNotify(message string) {
+	b, err := tb.NewBot(tb.Settings{
+		Token: os.Getenv("TELEGRAM_BOT_TOKEN"),
+	})
+
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	chat_id, err := strconv.Atoi(os.Getenv("TELEGRAM_CHAT_ID"))
+	recipient := tb.ChatID(chat_id)
+
+	_, err = b.Send(recipient, message)
+
+	if err != nil {
+		log.Print(err)
+	}
+}
